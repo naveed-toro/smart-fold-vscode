@@ -14,8 +14,33 @@
   "contributes": {
     "commands": [
       {
-        "command": "smart-fold-comments.helloWorld",
-        "title": "Hello World"
+        "command": "smartfold.toggleAll",
+        "title": "Smart Fold: Clean Slate (Hide All)"
+      },
+      {
+        "command": "smartfold.toggleCode",
+        "title": "Smart Fold: Reading Mode (Hide Code)"
+      },
+      {
+        "command": "smartfold.toggleComments",
+        "title": "Smart Fold: Coding Mode (Hide Comments)"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "smartfold.toggleAll",
+        "key": "alt+z",
+        "mac": "alt+z"
+      },
+      {
+        "command": "smartfold.toggleCode",
+        "key": "alt+x",
+        "mac": "alt+x"
+      },
+      {
+        "command": "smartfold.toggleComments",
+        "key": "alt+c",
+        "mac": "alt+c"
       }
     ]
   },

@@ -1,26 +1,135 @@
-// The module 'vscode' contains the VS Code extensibility API
-// Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
 
-// This method is called when your extension is activated
-// Your extension is activated the very first time the command is executed
+// 1. Define the distinct emojis for our modes
+const commentDeco = vscode.window.createTextEditorDecorationType({
+    textDecoration: 'none; display: none;',
+    before: { contentText: '💬 ', margin: '0 2px', color: '#888888' }
+});
+
+const codeDeco = vscode.window.createTextEditorDecorationType({
+    textDecoration: 'none; display: none;',
+    before: { contentText: '💻 ', margin: '0 2px', color: '#4CAF50' }
+});
+
+// 2. State Managers (The Brain)
+let currentMode: 'normal' | 'all' | 'code' | 'comments' = 'normal';
+let unfoldedLines: Set<number> = new Set();
+let statusBarItem: vscode.StatusBarItem; // <-- The "Caps Lock Light"
+
 export function activate(context: vscode.ExtensionContext) {
+    
+    // --- Setup Status Bar ---
+    statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
+    context.subscriptions.push(statusBarItem);
+    updateStatusBar(); // Show initial state
+    // ------------------------
 
-	// Use the console to output diagnostic information (console.log) and errors (console.error)
-	// This line of code will only be executed once when your extension is activated
-	console.log('Congratulations, your extension "smart-fold-comments" is now active!');
+    // Command 1: Clean Slate Mode
+    let toggleAll = vscode.commands.registerCommand('smartfold.toggleAll', () => {
+        currentMode = currentMode === 'all' ? 'normal' : 'all';
+        unfoldedLines.clear();
+        updateDecorations();
+        updateStatusBar();
+    });
 
-	// The command has been defined in the package.json file
-	// Now provide the implementation of the command with registerCommand
-	// The commandId parameter must match the command field in package.json
-	const disposable = vscode.commands.registerCommand('smart-fold-comments.helloWorld', () => {
-		// The code you place here will be executed every time your command is executed
-		// Display a message box to the user
-		vscode.window.showInformationMessage('Hello World from Smart Fold Comments!');
-	});
+    // Command 2: Reading Mode (Show Comments)
+    let toggleCode = vscode.commands.registerCommand('smartfold.toggleCode', () => {
+        currentMode = currentMode === 'code' ? 'normal' : 'code';
+        unfoldedLines.clear();
+        updateDecorations();
+        updateStatusBar();
+    });
 
-	context.subscriptions.push(disposable);
+    // Command 3: Coding Mode (Show Code)
+    let toggleComments = vscode.commands.registerCommand('smartfold.toggleComments', () => {
+        currentMode = currentMode === 'comments' ? 'normal' : 'comments';
+        unfoldedLines.clear();
+        updateDecorations();
+        updateStatusBar();
+    });
+
+    // Event: Sticky Unfold logic
+    vscode.window.onDidChangeTextEditorSelection(event => {
+        if (currentMode === 'normal') return;
+        
+        let needsUpdate = false;
+        for (const selection of event.selections) {
+            const line = selection.active.line;
+            if (!unfoldedLines.has(line)) {
+                unfoldedLines.add(line);
+                needsUpdate = true;
+            }
+        }
+        if (needsUpdate) updateDecorations();
+    }, null, context.subscriptions);
+
+    // Event: Re-apply when typing or switching tabs
+    vscode.workspace.onDidChangeTextDocument(() => updateDecorations(), null, context.subscriptions);
+    vscode.window.onDidChangeActiveTextEditor(() => {
+        updateDecorations();
+        updateStatusBar();
+    }, null, context.subscriptions);
+
+    context.subscriptions.push(toggleAll, toggleCode, toggleComments);
 }
 
-// This method is called when your extension is deactivated
-export function deactivate() {}
+// --- Status Bar Logic ---
+function updateStatusBar() {
+    if (currentMode === 'normal') {
+        statusBarItem.hide(); // Hide the light when normal
+    } else {
+        if (currentMode === 'all') {
+            statusBarItem.text = `$(eye-closed) Smart Fold: Clean Slate 📦`;
+        } else if (currentMode === 'code') {
+            statusBarItem.text = `$(eye-closed) Smart Fold: Reading Mode 💬`;
+        } else if (currentMode === 'comments') {
+            statusBarItem.text = `$(eye-closed) Smart Fold: Coding Mode 💻`;
+        }
+        statusBarItem.show(); // Turn on the light
+    }
+}
+
+function updateDecorations() {
+    const editor = vscode.window.activeTextEditor;
+    if (!editor) return;
+
+    if (currentMode === 'normal') {
+        editor.setDecorations(commentDeco, []);
+        editor.setDecorations(codeDeco, []);
+        return;
+    }
+
+    const commentRanges: vscode.Range[] = [];
+    const codeRanges: vscode.Range[] = [];
+    const document = editor.document;
+
+    for (let i = 0; i < document.lineCount; i++) {
+        if (unfoldedLines.has(i)) continue;
+
+        const line = document.lineAt(i);
+        const text = line.text.trim();
+
+        if (text === '') continue;
+
+        const isComment = text.startsWith('//') || text.startsWith('/*') || text.startsWith('*');
+
+        const range = new vscode.Range(
+            new vscode.Position(i, line.firstNonWhitespaceCharacterIndex),
+            new vscode.Position(i, line.text.length)
+        );
+
+        if (isComment) {
+            if (currentMode === 'all' || currentMode === 'comments') commentRanges.push(range);
+        } else {
+            if (currentMode === 'all' || currentMode === 'code') codeRanges.push(range);
+        }
+    }
+
+    editor.setDecorations(commentDeco, commentRanges);
+    editor.setDecorations(codeDeco, codeRanges);
+}
+
+export function deactivate() {
+    unfoldedLines.clear();
+    if (statusBarItem) statusBarItem.dispose();
+}
