@@ -1,4 +1,4 @@
-# Smart Fold (VS Code Extension) 📦💻💬
+# Smart Fold Comments (VS Code Extension) 📦💻💬
 
 A custom VS Code decorator extension designed to solve the visual clutter in large, legacy codebases. It gives you a bird's-eye "Map View" of your files by allowing you to independently toggle the visibility of code and human-readable comments.
 
