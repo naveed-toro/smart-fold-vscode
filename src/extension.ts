@@ -48,9 +48,31 @@ export function activate(context: vscode.ExtensionContext) {
         updateStatusBar();
     });
 
-    // Event: Sticky Unfold logic
+// Command 4: Toggle Current Single Line (Pack/Unpack) - Alt + S
+    let toggleCurrent = vscode.commands.registerCommand('smartfold.toggleCurrent', () => {
+        const editor = vscode.window.activeTextEditor;
+        if (!editor) return;
+        
+        const line = editor.selection.active.line;
+
+        // If it's currently unfolded (open), close it by removing from the set
+        if (unfoldedLines.has(line)) {
+            unfoldedLines.delete(line);
+        } else {
+            // If it's closed, open it manually
+            unfoldedLines.add(line);
+        }
+        updateDecorations();
+    });
+
+// Event: Sticky Unfold logic
     vscode.window.onDidChangeTextEditorSelection(event => {
         if (currentMode === 'normal') return;
+        
+        // 🚀 THE FIX: Ignore keyboard navigation. Only auto-unfold on Mouse Clicks!
+        if (event.kind !== vscode.TextEditorSelectionChangeKind.Mouse) {
+            return;
+        }
         
         let needsUpdate = false;
         for (const selection of event.selections) {
@@ -70,7 +92,7 @@ export function activate(context: vscode.ExtensionContext) {
         updateStatusBar();
     }, null, context.subscriptions);
 
-    context.subscriptions.push(toggleAll, toggleCode, toggleComments);
+    context.subscriptions.push(toggleAll, toggleCode, toggleComments, toggleCurrent);
 }
 
 // --- Status Bar Logic ---

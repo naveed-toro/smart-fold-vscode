@@ -24,7 +24,15 @@
       {
         "command": "smartfold.toggleComments",
         "title": "Smart Fold: Coding Mode (Hide Comments)"
-      }
+      },
+      {
+          "command": "smartfold.toggleComments",
+          "title": "Smart Fold: Coding Mode (Hide Comments)"
+        },
+        {
+          "command": "smartfold.toggleCurrent",
+          "title": "Smart Fold: Toggle Current Line (Pack/Unpack)"
+        }
     ],
     "keybindings": [
       {
@@ -41,7 +49,17 @@
         "command": "smartfold.toggleComments",
         "key": "alt+c",
         "mac": "alt+c"
-      }
+      },
+      {
+          "command": "smartfold.toggleComments",
+          "key": "alt+c",
+          "mac": "alt+c"
+        },
+        {
+          "command": "smartfold.toggleCurrent",
+          "key": "alt+s",
+          "mac": "alt+s"
+        }
     ]
   },
   "scripts": {
