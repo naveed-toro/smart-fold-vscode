@@ -1,6 +1,6 @@
 {
-  "name": "smart-fold-comments",
-  "displayName": "Smart Fold Comments",
+  "name": "smart-fold",
+  "displayName": "Smart Fold",
   "description": "",
   "version": "0.0.1",
   "engines": {

@@ -1,4 +1,4 @@
-# Smart Fold Comments (VS Code Extension) 📦💻💬
+# Smart Fold (VS Code Extension) 📦💻💬
 
 A custom VS Code decorator extension designed to solve the visual clutter in large, legacy codebases. It gives you a bird's-eye "Map View" of your files by allowing you to independently toggle the visibility of code and human-readable comments.
 
@@ -21,14 +21,17 @@ That is why I decided to build this extension from the ground up.
 
 ## ✨ Features & View Modes
 
-Instead of scrolling through thousands of lines, use these three modes to focus only on what matters:
+Instead of scrolling through thousands of lines, use these modes to focus only on what matters:
 
 * 📦 **Clean Slate (Map View):** Hides everything. Gives you a structural, distraction-free map of the entire file.
-* 💻 **Reading Mode (Comments Only):** Hides all code. Perfect for reading documentation, AI-generated notes, and understanding the logic flow.
-* 💬 **Coding Mode (Code Only):** Hides all comments. Perfect for pure, focused coding.
+* 💬 **Reading Mode (Comments Only):** Hides all code. Perfect for reading documentation, AI-generated notes, and understanding the logic flow.
+* 💻 **Coding Mode (Code Only):** Hides all comments. Perfect for pure, focused coding.
+* 🖱️ **Sticky Unfold (Auto-Reveal):** Click anywhere on a folded line (emoji) to instantly unfold and read it.
+* 🚥 **Status Bar Indicator:** Always know which mode is active with a handy indicator in the VS Code status bar.
 
 ## ⌨️ Default Shortcuts
 
-* `Alt + Z` : Toggle All (Hides both Code and Comments)
-* `Alt + X` : Toggle Code (Shows Comments only)
-* `Alt + C` : Toggle Comments (Shows Code only)
+* `Alt + Z` : Clean Slate (Hides both Code and Comments)
+* `Alt + X` : Reading Mode (Shows Comments, Hides Code)
+* `Alt + C` : Coding Mode (Shows Code, Hides Comments)
+* `Alt + S` : Toggle Current Line (Manually pack/unpack the line under your cursor)
