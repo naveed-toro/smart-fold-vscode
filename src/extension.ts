@@ -163,7 +163,7 @@ export function activate(context: vscode.ExtensionContext) {
         }
     });
 
-    // Event: Sticky Unfold logic (Mouse Click Only)
+    // Event: Sticky Unfold logic (Smart Mouse: Single click only, ignore drag selections)
     vscode.window.onDidChangeTextEditorSelection(event => {
         if (event.kind !== vscode.TextEditorSelectionChangeKind.Mouse) return;
         
@@ -173,6 +173,9 @@ export function activate(context: vscode.ExtensionContext) {
         const state = getState(uri);
 
         for (const selection of event.selections) {
+           // Smart Logic: If the user is drag-selecting, do not unfold hidden lines!
+            if (!selection.isEmpty) continue;
+
             const lineNum = selection.active.line;
             
             if (isLineHidden(lineNum, document, state)) {
