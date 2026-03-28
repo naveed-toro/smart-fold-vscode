@@ -1,7 +1,8 @@
 {
   "name": "smart-fold",
   "displayName": "Smart Fold",
-  "description": "",
+  "publisher": "naveed-toro",
+  "description": "The smartest way to handle code folding in VS Code. Hide the code to read the comments, or hide the comments to write the code.",
   "version": "0.0.1",
   "repository": {
   "type": "git",
