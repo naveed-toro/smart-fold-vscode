@@ -48,28 +48,41 @@ export function activate(context: vscode.ExtensionContext) {
         updateStatusBar();
     });
 
-    // Command 4: Universal Intelligent Toggle (Pack/Unpack)
+    // Command 4: Universal Intelligent Toggle (Pack/Unpack) - MULTI-LINE SUPPORT
     let toggleCurrent = vscode.commands.registerCommand('smartfold.toggleCurrent', () => {
         const editor = vscode.window.activeTextEditor;
         if (!editor) return;
         
-        const lineNum = editor.selection.active.line;
         const document = editor.document;
-        
-        // Don't do anything on empty lines
-        if (document.lineAt(lineNum).text.trim() === '') return;
+        const selectedLines = new Set<number>();
 
-        // The Magic: Check current effective visibility
-        const currentlyHidden = isLineHidden(lineNum, document);
+        // 1. Collect all unique, non-empty lines in the current selection(s)
+        for (const selection of editor.selections) {
+            for (let i = selection.start.line; i <= selection.end.line; i++) {
+                if (document.lineAt(i).text.trim() !== '') {
+                    selectedLines.add(i);
+                }
+            }
+        }
 
-        if (currentlyHidden) {
-            // If it's hidden, user wants to SHOW it
-            manuallyFoldedLines.delete(lineNum);
-            unfoldedLines.add(lineNum);
-        } else {
-            // If it's visible, user wants to HIDE it
-            unfoldedLines.delete(lineNum);
-            manuallyFoldedLines.add(lineNum);
+        // If no valid lines selected, do nothing
+        if (selectedLines.size === 0) return;
+
+        // 2. Determine the "Intent" based on the FIRST line in the selection
+        const firstLine = Math.min(...Array.from(selectedLines));
+        const currentlyHidden = isLineHidden(firstLine, document);
+
+        // 3. Apply the intent to ALL selected lines instantly
+        for (const lineNum of selectedLines) {
+            if (currentlyHidden) {
+                // Intent is to SHOW all
+                manuallyFoldedLines.delete(lineNum);
+                unfoldedLines.add(lineNum);
+            } else {
+                // Intent is to HIDE all
+                unfoldedLines.delete(lineNum);
+                manuallyFoldedLines.add(lineNum);
+            }
         }
         
         updateDecorations();
