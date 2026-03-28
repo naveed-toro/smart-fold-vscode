@@ -6,8 +6,8 @@
   "description": "The smartest way to handle code folding in VS Code. Hide the code to read the comments, or hide the comments to write the code.",
   "version": "0.0.1",
   "repository": {
-  "type": "git",
-  "url": "https://github.com/naveed-toro/smart-fold-vscode.git"
+    "type": "git",
+    "url": "https://github.com/naveed-toro/smart-fold-vscode.git"
   },
   "engines": {
     "vscode": "^1.110.0"
@@ -32,13 +32,13 @@
         "title": "Smart Fold: Coding Mode (Hide Comments)"
       },
       {
-          "command": "smartfold.toggleComments",
-          "title": "Smart Fold: Coding Mode (Hide Comments)"
-        },
-        {
-          "command": "smartfold.toggleCurrent",
-          "title": "Smart Fold: Toggle Current Line (Pack/Unpack)"
-        }
+        "command": "smartfold.toggleCurrent",
+        "title": "Smart Fold: Toggle Current Line (Pack/Unpack)"
+      },
+      {
+        "command": "smartfold.smartCopy",
+        "title": "Smart Fold: Smart Copy (Visible Lines Only)"
+      }
     ],
     "keybindings": [
       {
@@ -57,15 +57,16 @@
         "mac": "alt+c"
       },
       {
-          "command": "smartfold.toggleComments",
-          "key": "alt+c",
-          "mac": "alt+c"
-        },
-        {
-          "command": "smartfold.toggleCurrent",
-          "key": "alt+s",
-          "mac": "alt+s"
-        }
+        "command": "smartfold.toggleCurrent",
+        "key": "alt+s",
+        "mac": "alt+s"
+      },
+      {
+        "command": "smartfold.smartCopy",
+        "key": "ctrl+c",
+        "mac": "cmd+c",
+        "when": "editorTextFocus"
+      }
     ]
   },
   "scripts": {

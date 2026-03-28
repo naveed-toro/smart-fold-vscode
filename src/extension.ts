@@ -56,7 +56,6 @@ export function activate(context: vscode.ExtensionContext) {
         const document = editor.document;
         const selectedLines = new Set<number>();
 
-        // 1. Collect all unique, non-empty lines in the current selection(s)
         for (const selection of editor.selections) {
             for (let i = selection.start.line; i <= selection.end.line; i++) {
                 if (document.lineAt(i).text.trim() !== '') {
@@ -65,27 +64,62 @@ export function activate(context: vscode.ExtensionContext) {
             }
         }
 
-        // If no valid lines selected, do nothing
         if (selectedLines.size === 0) return;
 
-        // 2. Determine the "Intent" based on the FIRST line in the selection
         const firstLine = Math.min(...Array.from(selectedLines));
         const currentlyHidden = isLineHidden(firstLine, document);
 
-        // 3. Apply the intent to ALL selected lines instantly
         for (const lineNum of selectedLines) {
             if (currentlyHidden) {
-                // Intent is to SHOW all
                 manuallyFoldedLines.delete(lineNum);
                 unfoldedLines.add(lineNum);
             } else {
-                // Intent is to HIDE all
                 unfoldedLines.delete(lineNum);
                 manuallyFoldedLines.add(lineNum);
             }
         }
-        
         updateDecorations();
+    });
+
+    // Command 5: SMART COPY (Only copy visible lines)
+    let smartCopy = vscode.commands.registerCommand('smartfold.smartCopy', async () => {
+        const editor = vscode.window.activeTextEditor;
+        if (!editor) {
+            await vscode.commands.executeCommand('editor.action.clipboardCopyAction');
+            return;
+        }
+
+        const document = editor.document;
+        let textToCopy: string[] = [];
+
+        for (const selection of editor.selections) {
+            if (selection.isEmpty) {
+                // If nothing is selected, VS Code normally copies the whole line
+                const lineNum = selection.active.line;
+                if (!isLineHidden(lineNum, document)) {
+                    textToCopy.push(document.lineAt(lineNum).text);
+                }
+            } else {
+                // If user selected a block of text
+                let visibleLinesInSelection: string[] = [];
+                for (let i = selection.start.line; i <= selection.end.line; i++) {
+                    if (!isLineHidden(i, document)) {
+                        let startChar = (i === selection.start.line) ? selection.start.character : 0;
+                        let endChar = (i === selection.end.line) ? selection.end.character : document.lineAt(i).text.length;
+                        visibleLinesInSelection.push(document.lineAt(i).text.substring(startChar, endChar));
+                    }
+                }
+                if (visibleLinesInSelection.length > 0) {
+                    textToCopy.push(visibleLinesInSelection.join('\n'));
+                }
+            }
+        }
+
+        if (textToCopy.length > 0) {
+            const finalString = textToCopy.join('\n');
+            await vscode.env.clipboard.writeText(finalString);
+            vscode.window.setStatusBarMessage('$(check) Copied visible lines only!', 3000);
+        }
     });
 
     // Event: Sticky Unfold logic (Mouse Click Only)
@@ -98,7 +132,6 @@ export function activate(context: vscode.ExtensionContext) {
         for (const selection of event.selections) {
             const lineNum = selection.active.line;
             
-            // If we click on a hidden line, show it
             if (isLineHidden(lineNum, document)) {
                 manuallyFoldedLines.delete(lineNum);
                 unfoldedLines.add(lineNum);
@@ -115,7 +148,7 @@ export function activate(context: vscode.ExtensionContext) {
         updateStatusBar();
     }, null, context.subscriptions);
 
-    context.subscriptions.push(toggleAll, toggleCode, toggleComments, toggleCurrent);
+    context.subscriptions.push(toggleAll, toggleCode, toggleComments, toggleCurrent, smartCopy);
 }
 
 // Helper: Clears custom toggles when switching main modes
@@ -126,24 +159,20 @@ function resetStates() {
 
 // --- The Master Brain: Determines visibility dynamically ---
 function isLineHidden(lineNum: number, document: vscode.TextDocument, isComment?: boolean): boolean {
-    // 1. Highest Priority: Did the user manually toggle this specific line?
-    if (unfoldedLines.has(lineNum)) return false;     // Forced Show
-    if (manuallyFoldedLines.has(lineNum)) return true; // Forced Hide
+    if (unfoldedLines.has(lineNum)) return false;     
+    if (manuallyFoldedLines.has(lineNum)) return true; 
 
-    // 2. Default Mode Rules
-    if (currentMode === 'normal') return false; // Show all by default
-    if (currentMode === 'all') return true;     // Hide all by default
+    if (currentMode === 'normal') return false; 
+    if (currentMode === 'all') return true;     
 
-    // Determine line type if not passed
     if (isComment === undefined) {
         const text = document.lineAt(lineNum).text.trim();
         if (text === '') return false;
         isComment = text.startsWith('//') || text.startsWith('/*') || text.startsWith('*');
     }
 
-    // 3. Specific Mode Rules
-    if (currentMode === 'code' && !isComment) return true;    // Reading mode hides code
-    if (currentMode === 'comments' && isComment) return true; // Coding mode hides comments
+    if (currentMode === 'code' && !isComment) return true;    
+    if (currentMode === 'comments' && isComment) return true; 
     
     return false;
 }
@@ -181,14 +210,12 @@ function updateDecorations() {
 
         const isComment = text.startsWith('//') || text.startsWith('/*') || text.startsWith('*');
 
-        // Consult the Master Brain
         if (isLineHidden(i, document, isComment)) {
             const range = new vscode.Range(
                 new vscode.Position(i, line.firstNonWhitespaceCharacterIndex),
                 new vscode.Position(i, line.text.length)
             );
             
-            // Intelligently assign the right emoji based on the content
             if (isComment) {
                 commentRanges.push(range);
             } else {
