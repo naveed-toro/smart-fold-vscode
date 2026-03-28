@@ -13,21 +13,22 @@ const codeDeco = vscode.window.createTextEditorDecorationType({
 
 // 2. State Managers (The Brain)
 let currentMode: 'normal' | 'all' | 'code' | 'comments' = 'normal';
-let unfoldedLines: Set<number> = new Set();
-let statusBarItem: vscode.StatusBarItem; // <-- The "Caps Lock Light"
+let unfoldedLines: Set<number> = new Set(); // For Map Modes (what to show)
+let manuallyFoldedLines: Set<number> = new Set(); // NEW: For Normal Mode (what to hide)
+let statusBarItem: vscode.StatusBarItem; 
 
 export function activate(context: vscode.ExtensionContext) {
     
     // --- Setup Status Bar ---
     statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
     context.subscriptions.push(statusBarItem);
-    updateStatusBar(); // Show initial state
+    updateStatusBar();
     // ------------------------
 
     // Command 1: Clean Slate Mode
     let toggleAll = vscode.commands.registerCommand('smartfold.toggleAll', () => {
         currentMode = currentMode === 'all' ? 'normal' : 'all';
-        unfoldedLines.clear();
+        resetStates();
         updateDecorations();
         updateStatusBar();
     });
@@ -35,7 +36,7 @@ export function activate(context: vscode.ExtensionContext) {
     // Command 2: Reading Mode (Show Comments)
     let toggleCode = vscode.commands.registerCommand('smartfold.toggleCode', () => {
         currentMode = currentMode === 'code' ? 'normal' : 'code';
-        unfoldedLines.clear();
+        resetStates();
         updateDecorations();
         updateStatusBar();
     });
@@ -43,43 +44,56 @@ export function activate(context: vscode.ExtensionContext) {
     // Command 3: Coding Mode (Show Code)
     let toggleComments = vscode.commands.registerCommand('smartfold.toggleComments', () => {
         currentMode = currentMode === 'comments' ? 'normal' : 'comments';
-        unfoldedLines.clear();
+        resetStates();
         updateDecorations();
         updateStatusBar();
     });
 
-// Command 4: Toggle Current Single Line (Pack/Unpack) - Alt + S
+    // Command 4: Toggle Current Single Line (Pack/Unpack) - Alt + S
     let toggleCurrent = vscode.commands.registerCommand('smartfold.toggleCurrent', () => {
         const editor = vscode.window.activeTextEditor;
         if (!editor) return;
         
         const line = editor.selection.active.line;
 
-        // If it's currently unfolded (open), close it by removing from the set
-        if (unfoldedLines.has(line)) {
-            unfoldedLines.delete(line);
+        if (currentMode === 'normal') {
+            // Normal Mode Logic: We manually FOLD lines
+            if (manuallyFoldedLines.has(line)) {
+                manuallyFoldedLines.delete(line); // Unfold if already folded
+            } else {
+                manuallyFoldedLines.add(line); // Fold it
+            }
         } else {
-            // If it's closed, open it manually
-            unfoldedLines.add(line);
+            // Map Modes Logic: We manually UNFOLD lines
+            if (unfoldedLines.has(line)) {
+                unfoldedLines.delete(line);
+            } else {
+                unfoldedLines.add(line);
+            }
         }
         updateDecorations();
     });
 
-// Event: Sticky Unfold logic
+    // Event: Sticky Unfold logic (Mouse Click Only)
     vscode.window.onDidChangeTextEditorSelection(event => {
-        if (currentMode === 'normal') return;
-        
-        // 🚀 THE FIX: Ignore keyboard navigation. Only auto-unfold on Mouse Clicks!
-        if (event.kind !== vscode.TextEditorSelectionChangeKind.Mouse) {
-            return;
-        }
+        if (event.kind !== vscode.TextEditorSelectionChangeKind.Mouse) return;
         
         let needsUpdate = false;
         for (const selection of event.selections) {
             const line = selection.active.line;
-            if (!unfoldedLines.has(line)) {
-                unfoldedLines.add(line);
-                needsUpdate = true;
+
+            if (currentMode === 'normal') {
+                // If clicked on a manually folded line in normal mode, unfold it
+                if (manuallyFoldedLines.has(line)) {
+                    manuallyFoldedLines.delete(line);
+                    needsUpdate = true;
+                }
+            } else {
+                // If clicked on a folded line in map modes, unfold it
+                if (!unfoldedLines.has(line)) {
+                    unfoldedLines.add(line);
+                    needsUpdate = true;
+                }
             }
         }
         if (needsUpdate) updateDecorations();
@@ -95,10 +109,16 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(toggleAll, toggleCode, toggleComments, toggleCurrent);
 }
 
+// Helper to clean up states when switching modes
+function resetStates() {
+    unfoldedLines.clear();
+    manuallyFoldedLines.clear();
+}
+
 // --- Status Bar Logic ---
 function updateStatusBar() {
     if (currentMode === 'normal') {
-        statusBarItem.hide(); // Hide the light when normal
+        statusBarItem.hide();
     } else {
         if (currentMode === 'all') {
             statusBarItem.text = `$(eye-closed) Smart Fold: Clean Slate 📦`;
@@ -107,32 +127,26 @@ function updateStatusBar() {
         } else if (currentMode === 'comments') {
             statusBarItem.text = `$(eye-closed) Smart Fold: Coding Mode 💻`;
         }
-        statusBarItem.show(); // Turn on the light
+        statusBarItem.show();
     }
 }
 
+// --- The Engine ---
 function updateDecorations() {
     const editor = vscode.window.activeTextEditor;
     if (!editor) return;
-
-    if (currentMode === 'normal') {
-        editor.setDecorations(commentDeco, []);
-        editor.setDecorations(codeDeco, []);
-        return;
-    }
 
     const commentRanges: vscode.Range[] = [];
     const codeRanges: vscode.Range[] = [];
     const document = editor.document;
 
     for (let i = 0; i < document.lineCount; i++) {
-        if (unfoldedLines.has(i)) continue;
-
         const line = document.lineAt(i);
         const text = line.text.trim();
 
         if (text === '') continue;
 
+        // Intelligence: Is it a comment or code?
         const isComment = text.startsWith('//') || text.startsWith('/*') || text.startsWith('*');
 
         const range = new vscode.Range(
@@ -140,10 +154,24 @@ function updateDecorations() {
             new vscode.Position(i, line.text.length)
         );
 
-        if (isComment) {
-            if (currentMode === 'all' || currentMode === 'comments') commentRanges.push(range);
+        if (currentMode === 'normal') {
+            // NORMAL MODE: Only decorate lines the user explicitly folded
+            if (manuallyFoldedLines.has(i)) {
+                if (isComment) {
+                    commentRanges.push(range);
+                } else {
+                    codeRanges.push(range);
+                }
+            }
         } else {
-            if (currentMode === 'all' || currentMode === 'code') codeRanges.push(range);
+            // MAP MODES: Hide everything UNLESS user explicitly unfolded it
+            if (unfoldedLines.has(i)) continue;
+
+            if (isComment) {
+                if (currentMode === 'all' || currentMode === 'comments') commentRanges.push(range);
+            } else {
+                if (currentMode === 'all' || currentMode === 'code') codeRanges.push(range);
+            }
         }
     }
 
@@ -152,6 +180,6 @@ function updateDecorations() {
 }
 
 export function deactivate() {
-    unfoldedLines.clear();
+    resetStates();
     if (statusBarItem) statusBarItem.dispose();
 }
