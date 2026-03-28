@@ -11,11 +11,11 @@ const codeDeco = vscode.window.createTextEditorDecorationType({
     before: { contentText: '💻 ', margin: '0 2px', color: '#4CAF50' }
 });
 
-// 2. State Managers (The Brain)
+// 2. State Managers (The Brains)
 let currentMode: 'normal' | 'all' | 'code' | 'comments' = 'normal';
-let unfoldedLines: Set<number> = new Set(); // For Map Modes (what to show)
-let manuallyFoldedLines: Set<number> = new Set(); // NEW: For Normal Mode (what to hide)
-let statusBarItem: vscode.StatusBarItem; 
+let unfoldedLines: Set<number> = new Set();       // Lines explicitly SHOWING
+let manuallyFoldedLines: Set<number> = new Set(); // Lines explicitly HIDING
+let statusBarItem: vscode.StatusBarItem;
 
 export function activate(context: vscode.ExtensionContext) {
     
@@ -23,7 +23,6 @@ export function activate(context: vscode.ExtensionContext) {
     statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
     context.subscriptions.push(statusBarItem);
     updateStatusBar();
-    // ------------------------
 
     // Command 1: Clean Slate Mode
     let toggleAll = vscode.commands.registerCommand('smartfold.toggleAll', () => {
@@ -33,7 +32,7 @@ export function activate(context: vscode.ExtensionContext) {
         updateStatusBar();
     });
 
-    // Command 2: Reading Mode (Show Comments)
+    // Command 2: Reading Mode (Show Comments, Hide Code)
     let toggleCode = vscode.commands.registerCommand('smartfold.toggleCode', () => {
         currentMode = currentMode === 'code' ? 'normal' : 'code';
         resetStates();
@@ -41,7 +40,7 @@ export function activate(context: vscode.ExtensionContext) {
         updateStatusBar();
     });
 
-    // Command 3: Coding Mode (Show Code)
+    // Command 3: Coding Mode (Show Code, Hide Comments)
     let toggleComments = vscode.commands.registerCommand('smartfold.toggleComments', () => {
         currentMode = currentMode === 'comments' ? 'normal' : 'comments';
         resetStates();
@@ -49,28 +48,30 @@ export function activate(context: vscode.ExtensionContext) {
         updateStatusBar();
     });
 
-    // Command 4: Toggle Current Single Line (Pack/Unpack) - Alt + S
+    // Command 4: Universal Intelligent Toggle (Pack/Unpack)
     let toggleCurrent = vscode.commands.registerCommand('smartfold.toggleCurrent', () => {
         const editor = vscode.window.activeTextEditor;
         if (!editor) return;
         
-        const line = editor.selection.active.line;
+        const lineNum = editor.selection.active.line;
+        const document = editor.document;
+        
+        // Don't do anything on empty lines
+        if (document.lineAt(lineNum).text.trim() === '') return;
 
-        if (currentMode === 'normal') {
-            // Normal Mode Logic: We manually FOLD lines
-            if (manuallyFoldedLines.has(line)) {
-                manuallyFoldedLines.delete(line); // Unfold if already folded
-            } else {
-                manuallyFoldedLines.add(line); // Fold it
-            }
+        // The Magic: Check current effective visibility
+        const currentlyHidden = isLineHidden(lineNum, document);
+
+        if (currentlyHidden) {
+            // If it's hidden, user wants to SHOW it
+            manuallyFoldedLines.delete(lineNum);
+            unfoldedLines.add(lineNum);
         } else {
-            // Map Modes Logic: We manually UNFOLD lines
-            if (unfoldedLines.has(line)) {
-                unfoldedLines.delete(line);
-            } else {
-                unfoldedLines.add(line);
-            }
+            // If it's visible, user wants to HIDE it
+            unfoldedLines.delete(lineNum);
+            manuallyFoldedLines.add(lineNum);
         }
+        
         updateDecorations();
     });
 
@@ -79,27 +80,22 @@ export function activate(context: vscode.ExtensionContext) {
         if (event.kind !== vscode.TextEditorSelectionChangeKind.Mouse) return;
         
         let needsUpdate = false;
-        for (const selection of event.selections) {
-            const line = selection.active.line;
+        const document = event.textEditor.document;
 
-            if (currentMode === 'normal') {
-                // If clicked on a manually folded line in normal mode, unfold it
-                if (manuallyFoldedLines.has(line)) {
-                    manuallyFoldedLines.delete(line);
-                    needsUpdate = true;
-                }
-            } else {
-                // If clicked on a folded line in map modes, unfold it
-                if (!unfoldedLines.has(line)) {
-                    unfoldedLines.add(line);
-                    needsUpdate = true;
-                }
+        for (const selection of event.selections) {
+            const lineNum = selection.active.line;
+            
+            // If we click on a hidden line, show it
+            if (isLineHidden(lineNum, document)) {
+                manuallyFoldedLines.delete(lineNum);
+                unfoldedLines.add(lineNum);
+                needsUpdate = true;
             }
         }
         if (needsUpdate) updateDecorations();
     }, null, context.subscriptions);
 
-    // Event: Re-apply when typing or switching tabs
+    // Events: Re-apply when typing or switching tabs
     vscode.workspace.onDidChangeTextDocument(() => updateDecorations(), null, context.subscriptions);
     vscode.window.onDidChangeActiveTextEditor(() => {
         updateDecorations();
@@ -109,10 +105,34 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(toggleAll, toggleCode, toggleComments, toggleCurrent);
 }
 
-// Helper to clean up states when switching modes
+// Helper: Clears custom toggles when switching main modes
 function resetStates() {
     unfoldedLines.clear();
     manuallyFoldedLines.clear();
+}
+
+// --- The Master Brain: Determines visibility dynamically ---
+function isLineHidden(lineNum: number, document: vscode.TextDocument, isComment?: boolean): boolean {
+    // 1. Highest Priority: Did the user manually toggle this specific line?
+    if (unfoldedLines.has(lineNum)) return false;     // Forced Show
+    if (manuallyFoldedLines.has(lineNum)) return true; // Forced Hide
+
+    // 2. Default Mode Rules
+    if (currentMode === 'normal') return false; // Show all by default
+    if (currentMode === 'all') return true;     // Hide all by default
+
+    // Determine line type if not passed
+    if (isComment === undefined) {
+        const text = document.lineAt(lineNum).text.trim();
+        if (text === '') return false;
+        isComment = text.startsWith('//') || text.startsWith('/*') || text.startsWith('*');
+    }
+
+    // 3. Specific Mode Rules
+    if (currentMode === 'code' && !isComment) return true;    // Reading mode hides code
+    if (currentMode === 'comments' && isComment) return true; // Coding mode hides comments
+    
+    return false;
 }
 
 // --- Status Bar Logic ---
@@ -131,7 +151,7 @@ function updateStatusBar() {
     }
 }
 
-// --- The Engine ---
+// --- The Engine: Applies visual emojis ---
 function updateDecorations() {
     const editor = vscode.window.activeTextEditor;
     if (!editor) return;
@@ -146,31 +166,20 @@ function updateDecorations() {
 
         if (text === '') continue;
 
-        // Intelligence: Is it a comment or code?
         const isComment = text.startsWith('//') || text.startsWith('/*') || text.startsWith('*');
 
-        const range = new vscode.Range(
-            new vscode.Position(i, line.firstNonWhitespaceCharacterIndex),
-            new vscode.Position(i, line.text.length)
-        );
-
-        if (currentMode === 'normal') {
-            // NORMAL MODE: Only decorate lines the user explicitly folded
-            if (manuallyFoldedLines.has(i)) {
-                if (isComment) {
-                    commentRanges.push(range);
-                } else {
-                    codeRanges.push(range);
-                }
-            }
-        } else {
-            // MAP MODES: Hide everything UNLESS user explicitly unfolded it
-            if (unfoldedLines.has(i)) continue;
-
+        // Consult the Master Brain
+        if (isLineHidden(i, document, isComment)) {
+            const range = new vscode.Range(
+                new vscode.Position(i, line.firstNonWhitespaceCharacterIndex),
+                new vscode.Position(i, line.text.length)
+            );
+            
+            // Intelligently assign the right emoji based on the content
             if (isComment) {
-                if (currentMode === 'all' || currentMode === 'comments') commentRanges.push(range);
+                commentRanges.push(range);
             } else {
-                if (currentMode === 'all' || currentMode === 'code') codeRanges.push(range);
+                codeRanges.push(range);
             }
         }
     }
